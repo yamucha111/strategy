@@ -30,7 +30,7 @@ def get_historical_klines(symbol, interval, start_str, end_str=None, limit=500):
             if not data:
                 print(f"No data fetched: {data}")
                 break
-            
+                        
             start_timestamp = data[0][0]
             end_timestamp = data[-1][0]
             start_dt = Utils.timestamp_to_date_string(start_timestamp / 1000)
@@ -48,6 +48,7 @@ def get_historical_klines(symbol, interval, start_str, end_str=None, limit=500):
             
             # Sleep to avoid hitting API rate limits
             time.sleep(Utils.generate_random_number(1) + 1)
+            retry_attempts = 3
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
             if retry_attempts > 0:
                 print(f"Error fetching data: {e}. Retrying... ({retry_attempts} attempts left)")
@@ -56,19 +57,19 @@ def get_historical_klines(symbol, interval, start_str, end_str=None, limit=500):
                 continue
             else:
                 print(f"Error fetching data: {e}. Maximum retry attempts reached.")
-                all_data = []
                 break
         except Exception as e:
             print(f"Unexpected error fetching data: {e}")
-            all_data = []
             break
+        
+    _columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore']
 
     if all_data:
-        df = pd.DataFrame(all_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume', 'close_time', 'quote_asset_volume', 'number_of_trades', 'taker_buy_base_asset_volume', 'taker_buy_quote_asset_volume', 'ignore'])
+        df = pd.DataFrame(all_data, columns=_columns)
         df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
         return df
     else:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=_columns)
 
 def query_klines(symbol, interval, start_date, end_date=None, sort=True):
     current_time = datetime.datetime.now()
