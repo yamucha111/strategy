@@ -15,8 +15,8 @@ class BacktestEnv:
         self.window = window
         self.interval_factor = self.get_interval_factor()
         self.current_index = self.window * self.interval_factor  # 从第window根高时间单位K线开始
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [2.8, 0.8]})
-        # self.fig.subplots_adjust(hspace=0.01)  # 调整子图之间的间隔
+        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+        # self.fig.subplots_adjust(hspace=0.05)  # 减少子图之间的间隔
         self.buy_signals = []
         self.sell_signals = []
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
@@ -104,7 +104,7 @@ class BacktestEnv:
         self.ax1.set_title('Real-time Trading Backtest - Combined Data')
 
         # 绘制交易量
-        self.ax2.bar(higher_df['timestamp'], higher_df['volume'], width=0.01, color='blue', alpha=0.5)
+        self.ax2.bar(higher_df['timestamp'], higher_df['volume'], width=0.05, color='blue', alpha=0.5)
         self.ax2.set_xlabel('Time')
         self.ax2.set_ylabel('Volume')
 

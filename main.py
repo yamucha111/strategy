@@ -11,8 +11,8 @@ from core import data_fetcher
 
 if __name__ == "__main__":
     symbol = 'BTCUSDT'
-    interval_fast = '1m'
-    interval_slow = '1h'
+    interval_fast = '1h'
+    interval_slow = '1d'
     
     start_date = '2021-01-01'
     end_date = '2021-12-31'
