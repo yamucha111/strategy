@@ -24,7 +24,7 @@ if __name__ == "__main__":
     slow_his_data['date'] = pd.to_datetime(slow_his_data['timestamp'])
 
     # 实例化回测环境
-    env = BacktestEnv(fast_his_data, slow_his_data, speed=100, window=10)
+    env = BacktestEnv(fast_his_data, slow_his_data, speed=100, window=50)
 
     # 添加交易信号
     env.add_buy_signal(pd.Timestamp('2021-01-05 12:34'), 35000)

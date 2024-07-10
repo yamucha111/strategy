@@ -15,7 +15,8 @@ class BacktestEnv:
         self.window = window
         self.interval_factor = self.get_interval_factor()
         self.current_index = self.window * self.interval_factor  # 从第window根高时间单位K线开始
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [2.8, 0.8]})
+        # self.fig.subplots_adjust(hspace=0.01)  # 调整子图之间的间隔
         self.buy_signals = []
         self.sell_signals = []
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
@@ -97,7 +98,8 @@ class BacktestEnv:
             self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='r', markersize=10, label='Sell Signal')
 
         self.ax1.legend()
-        self.ax1.set_xlabel('Time')
+        # self.ax1.set_xlabel('Time')
+        self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
         self.ax1.set_ylabel('Price')
         self.ax1.set_title('Real-time Trading Backtest - Combined Data')
 
@@ -105,13 +107,19 @@ class BacktestEnv:
         self.ax2.bar(higher_df['timestamp'], higher_df['volume'], width=0.01, color='blue', alpha=0.5)
         self.ax2.set_xlabel('Time')
         self.ax2.set_ylabel('Volume')
+
+        # 旋转 x 轴标签
+        # plt.setp(self.ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        plt.setp(self.ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+        
         
     def plot_candlestick(self, df, ax, label, alpha=1.0):
         for idx, row in df.iterrows():
             color = 'green' if row['close'] >= row['open'] else 'red'
             ax.plot([row['timestamp'], row['timestamp']], [row['low'], row['high']], color='black', alpha=alpha)
             ax.plot([row['timestamp'], row['timestamp']], [row['open'], row['close']], color=color, linewidth=5, alpha=alpha)
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+        # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
         ax.set_label(label)
 
     def run(self):
