@@ -16,7 +16,6 @@ class BacktestEnv:
         self.interval_factor = self.get_interval_factor()
         self.current_index = self.window * self.interval_factor  # 从第window根高时间单位K线开始
         self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
-        # self.fig.subplots_adjust(hspace=0.05)  # 减少子图之间的间隔
         self.buy_signals = []
         self.sell_signals = []
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
@@ -98,32 +97,35 @@ class BacktestEnv:
             self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='r', markersize=10, label='Sell Signal')
 
         self.ax1.legend()
-        # self.ax1.set_xlabel('Time')
         self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
         self.ax1.set_ylabel('Price')
         self.ax1.set_title('Real-time Trading Backtest - Combined Data')
 
         # 绘制交易量
-        self.ax2.bar(higher_df['timestamp'], higher_df['volume'], width=0.05, color='blue', alpha=0.5)
+        bar_width = self.get_bar_width()  # 使用自定义方法获取柱子的宽度
+        self.ax2.bar(higher_df['timestamp'], higher_df['volume'], width=bar_width, color='blue', alpha=0.5)
         self.ax2.set_xlabel('Time')
         self.ax2.set_ylabel('Volume')
 
         # 旋转 x 轴标签
-        # plt.setp(self.ax1.xaxis.get_majorticklabels(), rotation=45, ha='right')
         plt.setp(self.ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
-        
-        
+
+    def get_bar_width(self):
+        """动态计算柱子的宽度以保持一致的视觉效果"""
+        fast_minutes = self.get_interval_minutes(self.fast_interval)
+        slow_minutes = self.get_interval_minutes(self.slow_interval)
+        width_ratio = fast_minutes / slow_minutes
+        return max(0.5, width_ratio * 0.5)  # 确保宽度不小于某个值，防止柱子过于窄
+
     def plot_candlestick(self, df, ax, label, alpha=1.0):
         for idx, row in df.iterrows():
             color = 'green' if row['close'] >= row['open'] else 'red'
             ax.plot([row['timestamp'], row['timestamp']], [row['low'], row['high']], color='black', alpha=alpha)
             ax.plot([row['timestamp'], row['timestamp']], [row['open'], row['close']], color=color, linewidth=5, alpha=alpha)
-        # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
         ax.set_label(label)
 
     def run(self):
-        # 初始绘制
         self.animate(0)
         ani = animation.FuncAnimation(self.fig, self.animate, interval=self.speed)
         plt.show()
