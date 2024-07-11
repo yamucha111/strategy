@@ -142,6 +142,7 @@ class BacktestEnv:
 
     def set_signals(self, current_time, current_price, higher_df):
         """使用当前最新的时间和价格来设置买入和卖出信号"""
+        pass
         # 示例：基于某些条件添加买入和卖出信号
         # if some_buy_condition:
         #     self.add_buy_signal(current_time, current_price)
