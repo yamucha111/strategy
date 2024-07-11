@@ -60,7 +60,8 @@ class BacktestEnv:
         # 获取当前时间和小时间单位数据
         current_time = self.minute_data['timestamp'].iloc[self.current_index]
         minute_df = self.minute_data.iloc[max(0, self.current_index - self.window * self.interval_factor):self.current_index]
-
+        strategy_df = self.minute_data.iloc[max(0, self.current_index - 200):self.current_index]
+        
         # 计算对应的高时间单位时间
         higher_time = self.get_rounded_time(current_time, self.slow_interval)
         higher_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(self.window)
@@ -77,6 +78,9 @@ class BacktestEnv:
         if self.previous_higher_time and self.previous_higher_time != higher_time:
             self.accumulated_volume = 0
         self.previous_higher_time = higher_time
+
+        # 调用set_signals方法来设置信号
+        self.set_signals(current_time, minute_df['close'].iloc[-1], strategy_df)
         
         self.ax1.clear()
         self.ax2.clear()
@@ -135,3 +139,11 @@ class BacktestEnv:
 
     def add_sell_signal(self, timestamp, price):
         self.sell_signals.append({'timestamp': timestamp, 'price': price})
+
+    def set_signals(self, current_time, current_price, higher_df):
+        """使用当前最新的时间和价格来设置买入和卖出信号"""
+        # 示例：基于某些条件添加买入和卖出信号
+        # if some_buy_condition:
+        #     self.add_buy_signal(current_time, current_price)
+        # if some_sell_condition:
+        #     self.add_sell_signal(current_time, current_price)
