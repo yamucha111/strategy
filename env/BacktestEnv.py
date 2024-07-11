@@ -61,12 +61,14 @@ class BacktestEnv:
         current_time = self.minute_data['timestamp'].iloc[self.current_index]
         minute_df = self.minute_data.iloc[max(0, self.current_index - self.window * self.interval_factor):self.current_index]
         min_strategy_df = self.minute_data.iloc[max(0, self.current_index - 200):self.current_index]
-        higher_strategy_df = self.higher_data.iloc[max(0, self.current_index - 200):self.current_index]
         
         # 计算对应的高时间单位时间
         higher_time = self.get_rounded_time(current_time, self.slow_interval)
         higher_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(self.window)
         
+        # 获取最新的200条大级别数据
+        higher_strategy_df = self.higher_data.iloc[max(0, len(self.higher_data) - 200):]
+
         # 动态更新当前高时间单位K线
         if len(higher_df) > 0:
             last_higher = higher_df.iloc[-1].copy()
@@ -115,6 +117,7 @@ class BacktestEnv:
         # 旋转 x 轴标签
         plt.setp(self.ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+
 
     def get_bar_width(self):
         """动态计算柱子的宽度以保持一致的视觉效果"""
