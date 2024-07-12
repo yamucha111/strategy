@@ -83,6 +83,7 @@ class BacktestEnv:
         self.previous_higher_time = higher_time
 
         # 调用set_signals方法来设置信号
+        higher_strategy_df.iloc[-1] = higher_df.iloc[-1]
         self.set_signals(current_time, minute_df['close'].iloc[-1], min_strategy_df, higher_strategy_df)
         
         self.ax1.clear()
