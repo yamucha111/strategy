@@ -116,10 +116,13 @@ class BacktestEnv:
         sells = [signal for signal in self.sell_signals if window_start_time <= signal['timestamp'] <= window_end_time]
 
         for buy in buys:
-            self.ax1.plot(buy['timestamp'], buy['price'], marker='^', color='b', markersize=10)
+            self.ax1.plot(buy['timestamp'], buy['price'], marker='^', color='blue', markersize=10)
 
         for sell in sells:
-            self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='w', markersize=10)
+            self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='black', markersize=10)
+            
+        # 绘制局部最高点和最低点
+        self.plot_local_extremes(higher_df)
 
         self.ax1.legend()
         self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
@@ -174,6 +177,24 @@ class BacktestEnv:
             ax.plot([row['timestamp'], row['timestamp']], [row['low'], row['high']], color='black', alpha=alpha)
             ax.plot([row['timestamp'], row['timestamp']], [row['open'], row['close']], color=color, linewidth=5, alpha=alpha)
         ax.set_label(label)
+        
+    def plot_local_extremes(self, df):
+        """绘制局部最高点和最低点"""
+        local_maxima = []
+        local_minima = []
+        
+        for i in range(5, len(df) - 5):
+            window = df.iloc[i - 5:i + 6]
+            if df['high'].iloc[i] == window['high'].max():
+                local_maxima.append({'timestamp': df['timestamp'].iloc[i], 'price': df['high'].iloc[i]})
+            if df['low'].iloc[i] == window['low'].min():
+                local_minima.append({'timestamp': df['timestamp'].iloc[i], 'price': df['low'].iloc[i]})
+        
+        for max_point in local_maxima:
+            self.ax1.plot(max_point['timestamp'], max_point['price'], marker='o', color='blue', markersize=5)
+        
+        for min_point in local_minima:
+            self.ax1.plot(min_point['timestamp'], min_point['price'], marker='o', color='orange', markersize=5)
 
     def run(self):
         self.animate(0)
