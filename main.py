@@ -14,7 +14,7 @@ if __name__ == "__main__":
     interval_fast = '1h'
     interval_slow = '1d'
     
-    start_date = '2021-01-01'
+    start_date = '2020-01-01'
     end_date = '2024-12-31'
 
     fast_his_data = data_fetcher.query_klines(symbol, interval_fast, start_date, end_date)
@@ -24,7 +24,7 @@ if __name__ == "__main__":
     slow_his_data['date'] = pd.to_datetime(slow_his_data['timestamp'])
 
     # 实例化回测环境
-    env = BacktestEnv(fast_his_data, slow_his_data, fast_interval=interval_fast, slow_interval=interval_slow, speed=100, window=50)
+    env = BacktestEnv(fast_his_data, slow_his_data, fast_interval=interval_fast, slow_interval=interval_slow, speed=100, window=160)
 
     # 添加交易信号
     # env.add_buy_signal(pd.Timestamp('2021-01-05 12:34'), 35000)

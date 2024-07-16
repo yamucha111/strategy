@@ -17,7 +17,7 @@ class BacktestEnv:
         self.window = window
         self.interval_factor = self.get_interval_factor()
         self.current_index = self.window * self.interval_factor  # 从第window根高时间单位K线开始
-        self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1, 1]})
+        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(16, 8), gridspec_kw={'height_ratios': [2, 1]})
         self.buy_signals = []
         self.sell_signals = []
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
@@ -77,7 +77,7 @@ class BacktestEnv:
         higher_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(self.window)
         
         # 获取最新的200条大级别数据
-        higher_strategy_df = self.higher_data.iloc[max(0, len(self.higher_data) - 200):].copy()
+        higher_strategy_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(200).copy()
 
         # 动态更新当前高时间单位K线
         if len(higher_df) > 0:
@@ -98,9 +98,15 @@ class BacktestEnv:
         
         self.ax1.clear()
         self.ax2.clear()
-        self.ax3.clear()
+        # self.ax3.clear()
         
         self.plot_candlestick(higher_df, self.ax1, 'Higher Time Frame Data')
+        
+        # 绘制布林带
+        upperband, middleband, lowerband = talib.BBANDS(higher_df['close'], timeperiod=20)
+        self.ax1.plot(higher_df['timestamp'], upperband, label='Upper Band', color='blue', linestyle='--')
+        self.ax1.plot(higher_df['timestamp'], middleband, label='Middle Band', color='black', linestyle='--')
+        self.ax1.plot(higher_df['timestamp'], lowerband, label='Lower Band', color='blue', linestyle='--')
         
         # 绘制当前窗口内的买卖信号
         window_start_time = higher_df['timestamp'].min()
@@ -110,10 +116,10 @@ class BacktestEnv:
         sells = [signal for signal in self.sell_signals if window_start_time <= signal['timestamp'] <= window_end_time]
 
         for buy in buys:
-            self.ax1.plot(buy['timestamp'], buy['price'], marker='^', color='g', markersize=10)
+            self.ax1.plot(buy['timestamp'], buy['price'], marker='^', color='b', markersize=10)
 
         for sell in sells:
-            self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='r', markersize=10)
+            self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='w', markersize=10)
 
         self.ax1.legend()
         self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
@@ -126,34 +132,34 @@ class BacktestEnv:
         self.ax2.set_xlabel('Time')
         self.ax2.set_ylabel('Volume')
 
-        # 动态计算并更新MACD
-        macd, signal, hist = talib.MACD(higher_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        if self.macd_values is None:
-            self.macd_values = {
-                'timestamp': higher_df['timestamp'].apply(mdates.date2num).values,
-                'macd': macd,
-                'signal': signal,
-                'hist': hist
-            }
-        else:
-            self.macd_values['timestamp'] = np.append(self.macd_values['timestamp'][-self.window:], mdates.date2num(higher_df['timestamp'].iloc[-1]))
-            self.macd_values['macd'] = np.append(self.macd_values['macd'][-self.window:], macd.iloc[-1])
-            self.macd_values['signal'] = np.append(self.macd_values['signal'][-self.window:], signal.iloc[-1])
-            self.macd_values['hist'] = np.append(self.macd_values['hist'][-self.window:], hist.iloc[-1])
+        # # 动态计算并更新MACD
+        # macd, signal, hist = talib.MACD(higher_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        # if self.macd_values is None:
+        #     self.macd_values = {
+        #         'timestamp': higher_df['timestamp'].apply(mdates.date2num).values,
+        #         'macd': macd,
+        #         'signal': signal,
+        #         'hist': hist
+        #     }
+        # else:
+        #     self.macd_values['timestamp'] = np.append(self.macd_values['timestamp'][-self.current_index:], mdates.date2num(higher_df['timestamp'].iloc[-1]))
+        #     self.macd_values['macd'] = np.append(self.macd_values['macd'][-self.current_index:], macd.iloc[-1])
+        #     self.macd_values['signal'] = np.append(self.macd_values['signal'][-self.current_index:], signal.iloc[-1])
+        #     self.macd_values['hist'] = np.append(self.macd_values['hist'][-self.current_index:], hist.iloc[-1])
 
-        self.ax3.plot(self.macd_values['timestamp'], self.macd_values['macd'], label='MACD', color='blue')
-        self.ax3.plot(self.macd_values['timestamp'], self.macd_values['signal'], label='Signal', color='red')
-        self.ax3.bar(self.macd_values['timestamp'], self.macd_values['hist'], label='Hist', color='gray', alpha=0.5)
+        # self.ax3.plot(self.macd_values['timestamp'], self.macd_values['macd'], label='MACD', color='blue')
+        # self.ax3.plot(self.macd_values['timestamp'], self.macd_values['signal'], label='Signal', color='red')
+        # self.ax3.bar(self.macd_values['timestamp'], self.macd_values['hist'], label='Hist', color='gray', alpha=0.5)
 
-        self.ax3.legend()
-        self.ax3.set_ylabel('MACD')
-        self.ax3.set_xlabel('Time')
+        # self.ax3.legend()
+        # self.ax3.set_ylabel('MACD')
+        # self.ax3.set_xlabel('Time')
 
         # 旋转 x 轴标签
         plt.setp(self.ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
-        plt.setp(self.ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
-        self.ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+        # plt.setp(self.ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        # self.ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
 
     def get_bar_width(self):
         """动态计算柱子的宽度以保持一致的视觉效果"""
@@ -187,12 +193,17 @@ class BacktestEnv:
         higher_strategy_df_120 = higher_strategy_df.iloc[-120:]
         top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
         ema5_top1_volume = top3_volume[0]
-        ema120 = talib.EMA(higher_strategy_df['close'], timeperiod=120).iloc[-1]
-        pre_ema120 = talib.EMA(higher_strategy_df['close'], timeperiod=120).iloc[-2]
-        ema140 = talib.EMA(higher_strategy_df['close'], timeperiod=140).iloc[-1]
-        ema160 = talib.EMA(higher_strategy_df['close'], timeperiod=160).iloc[-1]
-        ma120 = talib.SMA(higher_strategy_df['close'], timeperiod=120).iloc[-1]
-        pre_ma120 = talib.SMA(higher_strategy_df['close'], timeperiod=120).iloc[-2]
+        ema5s = talib.EMA(higher_strategy_df['close'], timeperiod=5)
+        last_ema5 = ema5s.iloc[-1]
+        pre_ema5 = ema5s.iloc[-2]
+        ema120s = talib.EMA(higher_strategy_df['close'], timeperiod=120)
+        last_ema120 = ema120s.iloc[-1]
+        pre_ema120 = ema120s.iloc[-2]
+        last_ema140 = talib.EMA(higher_strategy_df['close'], timeperiod=140).iloc[-1]
+        last_ema160 = talib.EMA(higher_strategy_df['close'], timeperiod=160).iloc[-1]
+        ma120s = talib.SMA(higher_strategy_df['close'], timeperiod=120)
+        last_ma120 = ma120s.iloc[-1]
+        pre_ma120 = ma120s.iloc[-2]
         
         min_macd, min_signal, min_his = talib.MACD(min_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
         min_last_signal = min_signal.iloc[-1]
@@ -202,17 +213,23 @@ class BacktestEnv:
         higher_last_signal = higher_his.iloc[-1]
         higher_pre_signal = higher_his.iloc[-2]
         
-        up_trend = ema120 > pre_ema120 and ma120 > pre_ma120
-        down_trend = ema120 < pre_ema120 and ma120 < pre_ma120
+        upperband, middleband, lowerband = talib.BBANDS(higher_strategy_df['close'], timeperiod=20)
         
-        if ema120 and ema140 and ema160 and ma120:
-            max_standard_price = max(ema120, ema140, ema160, ma120)
-            min_standard_price = min(ema120, ema140, ema160, ma120)
+        up_trend_ema120 = last_ema120 > pre_ema120 and last_ema120 > pre_ma120
+        down_trend_ema120 = last_ema120 < pre_ema120 and last_ema120 < pre_ma120
+        
+        up_trend_ema5 = last_ema5 > pre_ema5 and last_ema5 > pre_ma120
+        
+        if not np.isnan([last_ema120, last_ema140, last_ema160, last_ma120]).any():
+            max_standard_price = max(last_ema120, last_ema140, last_ema160, last_ma120)
+            min_standard_price = min(last_ema120, last_ema140, last_ema160, last_ma120)
             
-            if current_price > max_standard_price and higher_last_signal < 0:
+            if current_price > max_standard_price and higher_last_signal < 0 and current_price < middleband.iloc[-1]:
                 if min_pre_signal < 0 and min_last_signal >= 0:
-                    self.add_buy_signal(current_time, current_price)
+                    if current_price < middleband.iloc[-1]:
+                        self.add_buy_signal(current_time, current_price)
             
             if current_price < min_standard_price and higher_last_signal > 0:
                 if min_pre_signal > 0 and min_last_signal <= 0:
-                    self.add_sell_signal(current_time, current_price)
+                    if current_price > middleband.iloc[-1]:
+                        self.add_sell_signal(current_time, current_price)

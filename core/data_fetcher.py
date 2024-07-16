@@ -75,7 +75,7 @@ def query_klines(symbol, interval, start_date, end_date=None, sort=True):
     current_time = datetime.datetime.now()
     start_timestamp = int(pd.Timestamp(start_date).timestamp() * 1000)
     end_timestamp = int(pd.Timestamp(end_date).timestamp() * 1000) if end_date else int(current_time.timestamp() * 1000)
-    
+
     if end_date and pd.Timestamp(end_date) > current_time:
         end_date = current_time
         end_timestamp = int(current_time.timestamp() * 1000)
@@ -84,20 +84,22 @@ def query_klines(symbol, interval, start_date, end_date=None, sort=True):
     end_year = pd.Timestamp(end_date).year if end_date else current_time.year
 
     all_data = []
+    years_to_fetch = []
 
     for year in range(current_year, end_year + 1):
         filename = f"{symbol}_{interval}_{year}.csv"
         df = load_from_csv(filename)
         if df is not None:
             all_data.append(df)
-    
+        else:
+            years_to_fetch.append(year)
+
     if all_data:
         combined_df = pd.concat(all_data).drop_duplicates().reset_index(drop=True)
         combined_df['timestamp'] = pd.to_datetime(combined_df['timestamp'])
     else:
         combined_df = pd.DataFrame(columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 
-    # Check for missing data
     if not combined_df.empty:
         min_local_timestamp = combined_df['timestamp'].min()
         max_local_timestamp = combined_df['timestamp'].max()
@@ -115,15 +117,20 @@ def query_klines(symbol, interval, start_date, end_date=None, sort=True):
         missing_start = pd.to_datetime(start_date)
         missing_end = pd.to_datetime(end_date) if end_date else current_time
 
-    if missing_start <= missing_end:
-        missing_data = get_historical_klines(symbol, interval, int(missing_start.timestamp() * 1000), int(missing_end.timestamp() * 1000))
-        if not missing_data.empty:
-            combined_df = pd.concat([combined_df, missing_data]).drop_duplicates().reset_index(drop=True)
-
-            for year in range(current_year, end_year + 1):
-                year_data = combined_df[(combined_df['timestamp'].dt.year == year)]
-                if not year_data.empty:
-                    save_to_csv(year_data, f"{symbol}_{interval}_{year}.csv")
+    if years_to_fetch:
+        for year in years_to_fetch:
+            fetch_start = pd.Timestamp(f'{year}-01-01')
+            fetch_end = pd.Timestamp(f'{year}-12-31')
+            
+            if year == current_year:
+                fetch_start = max(fetch_start, pd.to_datetime(start_date))
+            if year == end_year:
+                fetch_end = min(fetch_end, pd.to_datetime(end_date) if end_date else current_time)
+            
+            missing_data = get_historical_klines(symbol, interval, int(fetch_start.timestamp() * 1000), int(fetch_end.timestamp() * 1000))
+            if not missing_data.empty:
+                combined_df = pd.concat([combined_df, missing_data]).drop_duplicates().reset_index(drop=True)
+                save_to_csv(missing_data, f"{symbol}_{interval}_{year}.csv")
 
     if sort:
         combined_df = combined_df.sort_values(by='timestamp').reset_index(drop=True)
