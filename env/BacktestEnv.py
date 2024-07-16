@@ -17,11 +17,12 @@ class BacktestEnv:
         self.window = window
         self.interval_factor = self.get_interval_factor()
         self.current_index = self.window * self.interval_factor  # 从第window根高时间单位K线开始
-        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8), gridspec_kw={'height_ratios': [3, 1]})
+        self.fig, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(12, 10), gridspec_kw={'height_ratios': [3, 1, 1]})
         self.buy_signals = []
         self.sell_signals = []
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
         self.previous_higher_time = None  # 用于记录上一个高时间单位时间戳
+        self.macd_values = None  # 存储初始的MACD计算值
         self.init_legend()
 
     def get_interval_minutes(self, interval):
@@ -97,6 +98,7 @@ class BacktestEnv:
         
         self.ax1.clear()
         self.ax2.clear()
+        self.ax3.clear()
         
         self.plot_candlestick(higher_df, self.ax1, 'Higher Time Frame Data')
         
@@ -124,9 +126,34 @@ class BacktestEnv:
         self.ax2.set_xlabel('Time')
         self.ax2.set_ylabel('Volume')
 
+        # 动态计算并更新MACD
+        macd, signal, hist = talib.MACD(higher_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        if self.macd_values is None:
+            self.macd_values = {
+                'timestamp': higher_df['timestamp'].apply(mdates.date2num).values,
+                'macd': macd,
+                'signal': signal,
+                'hist': hist
+            }
+        else:
+            self.macd_values['timestamp'] = np.append(self.macd_values['timestamp'][-self.window:], mdates.date2num(higher_df['timestamp'].iloc[-1]))
+            self.macd_values['macd'] = np.append(self.macd_values['macd'][-self.window:], macd.iloc[-1])
+            self.macd_values['signal'] = np.append(self.macd_values['signal'][-self.window:], signal.iloc[-1])
+            self.macd_values['hist'] = np.append(self.macd_values['hist'][-self.window:], hist.iloc[-1])
+
+        self.ax3.plot(self.macd_values['timestamp'], self.macd_values['macd'], label='MACD', color='blue')
+        self.ax3.plot(self.macd_values['timestamp'], self.macd_values['signal'], label='Signal', color='red')
+        self.ax3.bar(self.macd_values['timestamp'], self.macd_values['hist'], label='Hist', color='gray', alpha=0.5)
+
+        self.ax3.legend()
+        self.ax3.set_ylabel('MACD')
+        self.ax3.set_xlabel('Time')
+
         # 旋转 x 轴标签
         plt.setp(self.ax2.xaxis.get_majorticklabels(), rotation=45, ha='right')
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
+        plt.setp(self.ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
+        self.ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
 
     def get_bar_width(self):
         """动态计算柱子的宽度以保持一致的视觉效果"""
@@ -149,20 +176,15 @@ class BacktestEnv:
 
     def add_buy_signal(self, timestamp, price):
         self.buy_signals.append({'timestamp': timestamp, 'price': price})
+        self.buy_signals = self.buy_signals[-self.window:]
 
     def add_sell_signal(self, timestamp, price):
         self.sell_signals.append({'timestamp': timestamp, 'price': price})
+        self.sell_signals = self.sell_signals[-self.window:]
 
     def set_signals(self, current_time, current_price, min_strategy_df, higher_strategy_df):
         """使用当前最新的时间和价格来设置买入和卖出信号"""
-        pass
-        # 示例：基于某些条件添加买入和卖出信号
-        # if some_buy_condition:
-        #     self.add_buy_signal(current_time, current_price)
-        # if some_sell_condition:
-        #     self.add_sell_signal(current_time, current_price)
-        
-        higher_strategy_df_120 = higher_strategy_df.iloc[-120: ]
+        higher_strategy_df_120 = higher_strategy_df.iloc[-120:]
         top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
         ema5_top1_volume = top3_volume[0]
         ema120 = talib.EMA(higher_strategy_df['close'], timeperiod=120).iloc[-1]
@@ -172,9 +194,13 @@ class BacktestEnv:
         ma120 = talib.SMA(higher_strategy_df['close'], timeperiod=120).iloc[-1]
         pre_ma120 = talib.SMA(higher_strategy_df['close'], timeperiod=120).iloc[-2]
         
-        macd, signal, his = talib.MACD(min_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        last_signal = signal.iloc[-1]
-        pre_signal = signal.iloc[-2]
+        min_macd, min_signal, min_his = talib.MACD(min_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        min_last_signal = min_signal.iloc[-1]
+        min_pre_signal = min_signal.iloc[-2]
+        
+        higher_macd, higher_signal, higher_his = talib.MACD(higher_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        higher_last_signal = higher_his.iloc[-1]
+        higher_pre_signal = higher_his.iloc[-2]
         
         up_trend = ema120 > pre_ema120 and ma120 > pre_ma120
         down_trend = ema120 < pre_ema120 and ma120 < pre_ma120
@@ -182,13 +208,11 @@ class BacktestEnv:
         if ema120 and ema140 and ema160 and ma120:
             max_standard_price = max(ema120, ema140, ema160, ma120)
             min_standard_price = min(ema120, ema140, ema160, ma120)
-                
-            if current_price > max_standard_price:
-                if pre_signal < 0 and last_signal >= 0:
+            
+            if current_price > max_standard_price and higher_last_signal < 0:
+                if min_pre_signal < 0 and min_last_signal >= 0:
                     self.add_buy_signal(current_time, current_price)
             
-            if current_price < min_standard_price:
-                if pre_signal > 0 and last_signal <= 0:
+            if current_price < min_standard_price and higher_last_signal > 0:
+                if min_pre_signal > 0 and min_last_signal <= 0:
                     self.add_sell_signal(current_time, current_price)
-
-            
