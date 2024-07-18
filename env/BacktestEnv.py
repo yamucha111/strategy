@@ -108,6 +108,10 @@ class BacktestEnv:
         self.ax1.plot(higher_df['timestamp'], middleband, label='Middle Band', color='black', linestyle='--')
         self.ax1.plot(higher_df['timestamp'], lowerband, label='Lower Band', color='blue', linestyle='--')
         
+        # 绘制MA120
+        ma120 = talib.SMA(higher_df['close'], timeperiod=120)
+        self.ax1.plot(higher_df['timestamp'], ma120, label='MA120', color='purple')
+        
         # 绘制当前窗口内的买卖信号
         window_start_time = higher_df['timestamp'].min()
         window_end_time = higher_df['timestamp'].max()
@@ -163,7 +167,7 @@ class BacktestEnv:
         self.ax2.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
         # plt.setp(self.ax3.xaxis.get_majorticklabels(), rotation=45, ha='right')
         # self.ax3.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d %H:%M'))
-
+    
     def get_bar_width(self):
         """动态计算柱子的宽度以保持一致的视觉效果"""
         fast_minutes = self.get_interval_minutes(self.fast_interval)
@@ -178,21 +182,68 @@ class BacktestEnv:
             ax.plot([row['timestamp'], row['timestamp']], [row['open'], row['close']], color=color, linewidth=5, alpha=alpha)
         ax.set_label(label)
         
-    def plot_local_extremes(self, df):
-        """绘制局部最高点和最低点"""
+    def plot_local_extremes(self, df, min_interval=5):
+        """绘制局部最高点和最低点，且最高点和最低点之间需要有指定数量的有效K线间隔"""
         local_maxima = []
         local_minima = []
-        
-        for i in range(5, len(df) - 5):
-            window = df.iloc[i - 5:i + 6]
+
+        i = min_interval
+        while i < len(df) - min_interval:
+            window = df.iloc[max(0, i - 2 * min_interval):i + 2 * min_interval + 1]
+
+            # 寻找局部最高点
             if df['high'].iloc[i] == window['high'].max():
-                local_maxima.append({'timestamp': df['timestamp'].iloc[i], 'price': df['high'].iloc[i]})
+                max_point = {'timestamp': df['timestamp'].iloc[i], 'price': df['high'].iloc[i]}
+                max_confirmed = True
+
+                # 在接下来的K线内寻找突破该最高点低价的K线，并开始计数
+                for j in range(i + 1, min(i + 1 + min_interval, len(df))):
+                    if df['low'].iloc[j] < df['low'].iloc[i]:
+                        for k in range(j, min(j + min_interval, len(df))):
+                            if df['high'].iloc[k] > df['high'].iloc[i]:
+                                max_confirmed = False
+                                i = k  # 跳到新的高点位置继续寻找
+                                break
+                        if max_confirmed:
+                            break
+                    if not max_confirmed:
+                        break
+
+                if max_confirmed:
+                    local_maxima.append(max_point)
+                    i = j  # 跳过确认后的K线数量
+                    continue
+
+            # 寻找局部最低点
             if df['low'].iloc[i] == window['low'].min():
-                local_minima.append({'timestamp': df['timestamp'].iloc[i], 'price': df['low'].iloc[i]})
-        
+                min_point = {'timestamp': df['timestamp'].iloc[i], 'price': df['low'].iloc[i]}
+                min_confirmed = True
+
+                # 在接下来的K线内寻找突破该最低点高价的K线，并开始计数
+                for j in range(i + 1, min(i + 1 + min_interval, len(df))):
+                    if df['high'].iloc[j] > df['high'].iloc[i]:
+                        for k in range(j, min(j + min_interval, len(df))):
+                            if df['low'].iloc[k] < df['low'].iloc[i]:
+                                min_confirmed = False
+                                i = k  # 跳到新的低点位置继续寻找
+                                break
+                        if min_confirmed:
+                            break
+                    if not min_confirmed:
+                        break
+
+                if min_confirmed:
+                    local_minima.append(min_point)
+                    i = j  # 跳过确认后的K线数量
+                    continue
+
+            i += 1
+
+        # 绘制局部最高点
         for max_point in local_maxima:
             self.ax1.plot(max_point['timestamp'], max_point['price'], marker='o', color='blue', markersize=5)
-        
+
+        # 绘制局部最低点
         for min_point in local_minima:
             self.ax1.plot(min_point['timestamp'], min_point['price'], marker='o', color='orange', markersize=5)
 
