@@ -6,6 +6,7 @@ import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from core.strategy import Strategy
 import talib
+pd.set_option('mode.chained_assignment', None)
 
 class BacktestEnv:
     def __init__(self, minute_data, higher_data, fast_interval='1m', slow_interval='1h', speed=100, window=50):
@@ -23,8 +24,12 @@ class BacktestEnv:
         self.accumulated_volume = 0  # 用于累积当前高时间单位K线的交易量
         self.previous_higher_time = None  # 用于记录上一个高时间单位时间戳
         self.macd_values = None  # 存储初始的MACD计算值
+        self.local_maxima = []  # 全局记录局部最高点
+        self.local_minima = []  # 全局记录局部最低点
+        self.searching_for_max = True  # 初始状态为寻找最高点
+        self.last_extreme_timestamp = None  # 记录最后一个极值点的时间戳
         self.init_legend()
-
+        
     def get_interval_minutes(self, interval):
         """将时间单位转化为分钟数"""
         if interval.endswith('m'):
@@ -125,7 +130,10 @@ class BacktestEnv:
         for sell in sells:
             self.ax1.plot(sell['timestamp'], sell['price'], marker='v', color='black', markersize=10)
             
-        # 绘制局部最高点和最低点
+        # 更新局部极值点
+        self.update_local_extremes(higher_df)
+
+        # 绘制局部极值点
         self.plot_local_extremes(higher_df)
 
         self.ax1.legend()
@@ -182,70 +190,92 @@ class BacktestEnv:
             ax.plot([row['timestamp'], row['timestamp']], [row['open'], row['close']], color=color, linewidth=5, alpha=alpha)
         ax.set_label(label)
         
-    def plot_local_extremes(self, df, min_interval=5):
-        """绘制局部最高点和最低点，且最高点和最低点之间需要有指定数量的有效K线间隔"""
-        local_maxima = []
-        local_minima = []
+    def update_local_extremes(self, df, min_interval=5):
+        """更新和绘制局部最高点和最低点，且最高点和最低点之间需要有指定数量的有效K线间隔"""
+        if df.shape[0] < min_interval:
+            return
+        
+        if self.last_extreme_timestamp:
+            df = df[df['timestamp'] > self.last_extreme_timestamp].reset_index(drop=True)
+            if df.empty:
+                return
+            start_index = 0
+        else:
+            start_index = 0
+            
+        df_len = df.shape[0]
+        for i in range(start_index, df_len - min_interval):
+            if i >= len(df):
+                break
+            
+            if self.searching_for_max:
+                # 寻找局部最高点
+                window = df.iloc[max(0, i - min_interval):min(df_len, i + min_interval + 1)]
+                if df['high'].iloc[i] == window['high'].max():
+                    potential_max = {'timestamp': df['timestamp'].iloc[i], 'price': df['high'].iloc[i]}
+                    max_confirmed = False
 
-        i = min_interval
-        while i < len(df) - min_interval:
-            window = df.iloc[max(0, i - 2 * min_interval):i + 2 * min_interval + 1]
-
-            # 寻找局部最高点
-            if df['high'].iloc[i] == window['high'].max():
-                max_point = {'timestamp': df['timestamp'].iloc[i], 'price': df['high'].iloc[i]}
-                max_confirmed = True
-
-                # 在接下来的K线内寻找突破该最高点低价的K线，并开始计数
-                for j in range(i + 1, min(i + 1 + min_interval, len(df))):
-                    if df['low'].iloc[j] < df['low'].iloc[i]:
-                        for k in range(j, min(j + min_interval, len(df))):
-                            if df['high'].iloc[k] > df['high'].iloc[i]:
-                                max_confirmed = False
-                                i = k  # 跳到新的高点位置继续寻找
+                    # 在接下来的K线内寻找低于该最高点的K线，并开始计数
+                    for j in range(i + 1, df_len - min_interval):
+                        if df['low'].iloc[j] < df['low'].iloc[i]:
+                            # 找到低点，开始计数接下来的5条K线
+                            max_confirmed = True
+                            for k in range(j + 1, min(j + 1 + min_interval, len(df))):
+                                if df['high'].iloc[k] > df['high'].iloc[i]:
+                                    max_confirmed = False
+                                    break
+                            if max_confirmed:
+                                i = j  # 从找到的低点位置开始继续寻找
                                 break
-                        if max_confirmed:
-                            break
-                    if not max_confirmed:
+
+                    if max_confirmed:
+                        self.local_maxima.append(potential_max)
+                        self.searching_for_max = False  # 转换为寻找最低点
+                        self.last_extreme_timestamp = df['timestamp'].iloc[i]
                         break
 
-                if max_confirmed:
-                    local_maxima.append(max_point)
-                    i = j  # 跳过确认后的K线数量
-                    continue
+            else:
+                # 寻找局部最低点
+                window = df.iloc[max(0, i - min_interval):min(df_len, i + min_interval + 1)]
+                if df['low'].iloc[i] == window['low'].min():
+                    potential_min = {'timestamp': df['timestamp'].iloc[i], 'price': df['low'].iloc[i]}
+                    min_confirmed = False
 
-            # 寻找局部最低点
-            if df['low'].iloc[i] == window['low'].min():
-                min_point = {'timestamp': df['timestamp'].iloc[i], 'price': df['low'].iloc[i]}
-                min_confirmed = True
-
-                # 在接下来的K线内寻找突破该最低点高价的K线，并开始计数
-                for j in range(i + 1, min(i + 1 + min_interval, len(df))):
-                    if df['high'].iloc[j] > df['high'].iloc[i]:
-                        for k in range(j, min(j + min_interval, len(df))):
-                            if df['low'].iloc[k] < df['low'].iloc[i]:
-                                min_confirmed = False
-                                i = k  # 跳到新的低点位置继续寻找
+                    # 在接下来的K线内寻找高于该最低点的K线，并开始计数
+                    for j in range(i + 1, df_len - min_interval):
+                        if df['high'].iloc[j] > df['high'].iloc[i]:
+                            # 找到高点，开始计数接下来的5条K线
+                            min_confirmed = True
+                            for k in range(j + 1, min(j + 1 + min_interval, len(df))):
+                                if df['low'].iloc[k] < df['low'].iloc[i]:
+                                    min_confirmed = False
+                                    break
+                            if min_confirmed:
+                                i = j  # 从找到的高点位置开始继续寻找
                                 break
-                        if min_confirmed:
-                            break
-                    if not min_confirmed:
+
+                    if min_confirmed:
+                        self.local_minima.append(potential_min)
+                        self.searching_for_max = True  # 转换为寻找最高点
+                        self.last_extreme_timestamp = df['timestamp'].iloc[i]
                         break
 
-                if min_confirmed:
-                    local_minima.append(min_point)
-                    i = j  # 跳过确认后的K线数量
-                    continue
+    def plot_local_extremes(self, df):
+        """绘制局部最高点和最低点"""
+        window_start_time = df['timestamp'].min()
+        window_end_time = df['timestamp'].max()
 
-            i += 1
+        filtered_maxima = [max_point for max_point in self.local_maxima if window_start_time <= max_point['timestamp'] <= window_end_time]
+        for max_point in filtered_maxima:
+            timestamp = max_point['timestamp']
+            price = max_point['price']
+            self.ax1.plot(timestamp, price, marker='o', color='blue', markersize=5)
 
-        # 绘制局部最高点
-        for max_point in local_maxima:
-            self.ax1.plot(max_point['timestamp'], max_point['price'], marker='o', color='blue', markersize=5)
-
-        # 绘制局部最低点
-        for min_point in local_minima:
-            self.ax1.plot(min_point['timestamp'], min_point['price'], marker='o', color='orange', markersize=5)
+        filtered_minima = [min_point for min_point in self.local_minima if window_start_time <= min_point['timestamp'] <= window_end_time]
+        for min_point in filtered_minima:
+            timestamp = min_point['timestamp']
+            price = min_point['price']
+            self.ax1.plot(timestamp, price, marker='o', color='orange', markersize=5)
 
     def run(self):
         self.animate(0)
