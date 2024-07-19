@@ -28,6 +28,9 @@ class BacktestEnv:
         self.local_minima = []  # 全局记录局部最低点
         self.searching_for_max = True  # 初始状态为寻找最高点
         self.last_extreme_timestamp = None  # 记录最后一个极值点的时间戳
+        self.confirmation_window = 5  # 确认极值点的窗口大小
+        self.volume_breakout_points = {'up': [], 'down': []}  # 记录交易量突破点
+        self.last_volume_timestamp = None  # 记录上次处理的最后一个数据点的时间戳
         self.init_legend()
         
     def get_interval_minutes(self, interval):
@@ -135,6 +138,12 @@ class BacktestEnv:
 
         # 绘制局部极值点
         self.plot_local_extremes(higher_df)
+        
+        # 检查支撑位和压力位
+        self.check_support_resistance(higher_df)
+
+        # 绘制支撑位和压力位
+        self.plot_support_resistance(higher_df)
 
         self.ax1.legend()
         self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
@@ -276,6 +285,38 @@ class BacktestEnv:
             timestamp = min_point['timestamp']
             price = min_point['price']
             self.ax1.plot(timestamp, price, marker='o', color='orange', markersize=5)
+            
+    def check_support_resistance(self, df):
+        """检查并保存交易量突破点，并标记在图表上"""
+        higher_strategy_df_120 = df.iloc[-120:]
+        self.top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
+
+        if self.last_volume_timestamp is not None:
+            df = df[df['timestamp'] > self.last_volume_timestamp].reset_index(drop=True)
+            if df.empty:
+                return
+
+        for i in range(len(df)):
+            if df['volume'].iloc[i] > self.top3_volume[0]:
+                if df['close'].iloc[i] > df['open'].iloc[i]:
+                    self.volume_breakout_points['up'].append((df['timestamp'].iloc[i], df['high'].iloc[i]))
+                else:
+                    self.volume_breakout_points['down'].append((df['timestamp'].iloc[i], df['low'].iloc[i]))
+                self.last_volume_timestamp = df['timestamp'].iloc[i]
+
+    def plot_support_resistance(self, df):
+        """绘制当前窗口内的交易量突破点"""
+        window_start_time = df['timestamp'].min()
+        window_end_time = df['timestamp'].max()
+
+        filtered_up_points = [point for point in self.volume_breakout_points['up'] if window_start_time <= point[0] <= window_end_time]
+        filtered_down_points = [point for point in self.volume_breakout_points['down'] if window_start_time <= point[0] <= window_end_time]
+
+        for point in filtered_up_points:
+            self.ax1.plot(point[0], point[1], '_', markersize=15)
+
+        for point in filtered_down_points:
+            self.ax1.plot(point[0], point[1], '_', markersize=15)
 
     def run(self):
         self.animate(0)
