@@ -289,20 +289,29 @@ class BacktestEnv:
     def check_support_resistance(self, df):
         """检查并保存交易量突破点，并标记在图表上"""
         higher_strategy_df_120 = df.iloc[-120:]
-        self.top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
+        top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
 
         if self.last_volume_timestamp is not None:
-            df = df[df['timestamp'] > self.last_volume_timestamp].reset_index(drop=True)
+            # df = df[df['timestamp'] > self.last_volume_timestamp].reset_index(drop=True)
             if df.empty:
                 return
-
-        for i in range(len(df)):
-            if df['volume'].iloc[i] > self.top3_volume[0]:
+            
+            i = -1
+            if df['volume'].iloc[i] > top3_volume[0]:
                 if df['close'].iloc[i] > df['open'].iloc[i]:
                     self.volume_breakout_points['up'].append((df['timestamp'].iloc[i], df['high'].iloc[i]))
                 else:
                     self.volume_breakout_points['down'].append((df['timestamp'].iloc[i], df['low'].iloc[i]))
-                self.last_volume_timestamp = df['timestamp'].iloc[i]
+                # self.last_volume_timestamp = df['timestamp'].iloc[i]
+                return
+        else:
+            for i in range(len(df)):
+                if df['volume'].iloc[i] > top3_volume[0]:
+                    if df['close'].iloc[i] > df['open'].iloc[i]:
+                        self.volume_breakout_points['up'].append((df['timestamp'].iloc[i], df['high'].iloc[i]))
+                    else:
+                        self.volume_breakout_points['down'].append((df['timestamp'].iloc[i], df['low'].iloc[i]))
+                    self.last_volume_timestamp = df['timestamp'].iloc[i]
 
     def plot_support_resistance(self, df):
         """绘制当前窗口内的交易量突破点"""
@@ -361,7 +370,8 @@ class BacktestEnv:
         up_trend_ema120 = last_ema120 > pre_ema120 and last_ema120 > pre_ma120
         down_trend_ema120 = last_ema120 < pre_ema120 and last_ema120 < pre_ma120
         
-        up_trend_ema5 = last_ema5 > pre_ema5 and last_ema5 > pre_ma120
+        up_trend_ema5 = last_ema5 >= pre_ema5
+        down_trend_ema5 = last_ema5 <= pre_ema5
         
         if not np.isnan([last_ema120, last_ema140, last_ema160, last_ma120]).any():
             max_standard_price = max(last_ema120, last_ema140, last_ema160, last_ma120)
@@ -369,10 +379,10 @@ class BacktestEnv:
             
             if current_price > max_standard_price and higher_last_signal < 0 and current_price < middleband.iloc[-1]:
                 if min_pre_signal < 0 and min_last_signal >= 0:
-                    if current_price < middleband.iloc[-1]:
+                    if current_price < middleband.iloc[-1] and up_trend_ema5:
                         self.add_buy_signal(current_time, current_price)
             
             if current_price < min_standard_price and higher_last_signal > 0:
                 if min_pre_signal > 0 and min_last_signal <= 0:
-                    if current_price > middleband.iloc[-1]:
+                    if current_price > middleband.iloc[-1] and down_trend_ema5:
                         self.add_sell_signal(current_time, current_price)
