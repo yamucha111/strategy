@@ -135,6 +135,10 @@ def query_klines(symbol, interval, start_date, end_date=None, sort=True):
     if sort:
         combined_df = combined_df.sort_values(by='timestamp').reset_index(drop=True)
 
+    # 过滤结果，使其符合start_date和end_date
+    combined_df = combined_df[(combined_df['timestamp'] >= pd.to_datetime(start_date)) & 
+                              (combined_df['timestamp'] <= pd.to_datetime(end_date) if end_date else current_time)]
+
     return combined_df
 
 def save_to_csv(df, filename):

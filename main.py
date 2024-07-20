@@ -14,7 +14,7 @@ if __name__ == "__main__":
     interval_fast = '1h'
     interval_slow = '1d'
     
-    start_date = '2020-01-01'
+    start_date = '2020-03-15'
     end_date = '2024-12-31'
 
     fast_his_data = data_fetcher.query_klines(symbol, interval_fast, start_date, end_date)

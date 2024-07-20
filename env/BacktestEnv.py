@@ -31,6 +31,7 @@ class BacktestEnv:
         self.confirmation_window = 5  # 确认极值点的窗口大小
         self.volume_breakout_points = {'up': [], 'down': []}  # 记录交易量突破点
         self.last_volume_timestamp = None  # 记录上次处理的最后一个数据点的时间戳
+        self.origin_higher_df = None  # 记录上次处理的最后一个数据点的时间戳
         self.init_legend()
         
     def get_interval_minutes(self, interval):
@@ -83,6 +84,8 @@ class BacktestEnv:
         # 计算对应的高时间单位时间
         higher_time = self.get_rounded_time(current_time, self.slow_interval)
         higher_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(self.window)
+        if self.origin_higher_df is None or higher_df['timestamp'].iloc[-1] != self.origin_higher_df['timestamp'].iloc[-1]:
+            self.origin_higher_df = higher_df.copy()
         
         # 获取最新的200条大级别数据
         higher_strategy_df = self.higher_data[self.higher_data['timestamp'] <= higher_time].tail(200).copy()
@@ -140,10 +143,10 @@ class BacktestEnv:
         self.plot_local_extremes(higher_df)
         
         # 检查支撑位和压力位
-        self.check_support_resistance(higher_df)
+        self.check_support_resistance(self.origin_higher_df)
 
         # 绘制支撑位和压力位
-        self.plot_support_resistance(higher_df)
+        self.plot_support_resistance(self.origin_higher_df)
 
         self.ax1.legend()
         self.ax1.xaxis.set_visible(False)  # 隐藏第一个子图的 x 轴
