@@ -352,8 +352,12 @@ class BacktestEnv:
         last_ema5 = ema5s.iloc[-1]
         pre_ema5 = ema5s.iloc[-2]
         ema120s = talib.EMA(higher_strategy_df['close'], timeperiod=120)
+        min_ema120s = talib.EMA(min_strategy_df['close'], timeperiod=120)
         last_ema120 = ema120s.iloc[-1]
         pre_ema120 = ema120s.iloc[-2]
+        last_min_ema120 = min_ema120s.iloc[-1]
+        pre_min_ema120 = min_ema120s.iloc[-2]
+        
         last_ema140 = talib.EMA(higher_strategy_df['close'], timeperiod=140).iloc[-1]
         last_ema160 = talib.EMA(higher_strategy_df['close'], timeperiod=160).iloc[-1]
         ma120s = talib.SMA(higher_strategy_df['close'], timeperiod=120)
@@ -369,6 +373,10 @@ class BacktestEnv:
         higher_pre_signal = higher_his.iloc[-2]
         
         upperband, middleband, lowerband = talib.BBANDS(higher_strategy_df['close'], timeperiod=20)
+        last_middleband = middleband.iloc[-1]
+        last_lowerband = lowerband.iloc[-1]
+        last_upperband = upperband.iloc[-1]
+        pre_middleband = middleband.iloc[-2]
         
         up_trend_ema120 = last_ema120 > pre_ema120 and last_ema120 > pre_ma120
         down_trend_ema120 = last_ema120 < pre_ema120 and last_ema120 < pre_ma120
@@ -380,12 +388,24 @@ class BacktestEnv:
             max_standard_price = max(last_ema120, last_ema140, last_ema160, last_ma120)
             min_standard_price = min(last_ema120, last_ema140, last_ema160, last_ma120)
             
-            if current_price > max_standard_price and higher_last_signal < 0 and current_price < middleband.iloc[-1]:
+            # 布林带在120均线上方
+            up_bb_ma120 = last_upperband > last_ma120
+            down_bb_ma120 = last_lowerband < last_ma120
+            
+            # 获取最新放量点
+            up_max_vol_points = self.volume_breakout_points['up']
+            down_max_vol_points = self.volume_breakout_points['down']
+            up_vol_point_price = up_max_vol_points[-1][1] if len(up_max_vol_points) > 0 else None
+            down_vol_point_price = down_max_vol_points[-1][1] if len(down_max_vol_points) > 0 else None
+            up_trend_max_vol_bb_l = up_vol_point_price > last_middleband if up_vol_point_price is not None else False
+            down_trend_max_vol_bb_h = down_vol_point_price < last_middleband if down_vol_point_price is not None else False
+            
+            if current_price > max_standard_price and higher_last_signal < 0:
                 if min_pre_signal < 0 and min_last_signal >= 0:
-                    if current_price < middleband.iloc[-1] and up_trend_ema5:
+                    if current_price < last_middleband and up_trend_ema5:
                         self.add_buy_signal(current_time, current_price)
             
             if current_price < min_standard_price and higher_last_signal > 0:
                 if min_pre_signal > 0 and min_last_signal <= 0:
-                    if current_price > middleband.iloc[-1] and down_trend_ema5:
+                    if current_price > last_middleband and down_trend_ema5:
                         self.add_sell_signal(current_time, current_price)
