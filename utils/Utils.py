@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import pandas as pd
 import random
 
 class Utils:
@@ -66,3 +67,13 @@ class Utils:
         random_number = random.expovariate(1 / exponent)
         
         return random_number
+    
+    @staticmethod
+    def str_to_numeric(combined_df):
+        # 在读取数据后，确保数值列的类型正确
+        combined_df['open'] = pd.to_numeric(combined_df['open'], errors='coerce')
+        combined_df['high'] = pd.to_numeric(combined_df['high'], errors='coerce')
+        combined_df['low'] = pd.to_numeric(combined_df['low'], errors='coerce')
+        combined_df['close'] = pd.to_numeric(combined_df['close'], errors='coerce')
+        combined_df['volume'] = pd.to_numeric(combined_df['volume'], errors='coerce')
+        return combined_df
