@@ -125,17 +125,18 @@ class BacktestEnv:
         self.ax1.plot(higher_df['timestamp'], middleband, label='Middle Band', color='black', linestyle='--')
         self.ax1.plot(higher_df['timestamp'], lowerband, label='Lower Band', color='blue', linestyle='--')
         
-        # 绘制布林带
+        # 绘制小级别布林带
         min_upperband, min_middleband, min_lowerband = talib.BBANDS(minute_df['close'], timeperiod=20)
         self.ax1.plot(minute_df['timestamp'], min_upperband, color='black', linestyle='-')
         self.ax1.plot(minute_df['timestamp'], min_middleband, color='black', linestyle='-')
         self.ax1.plot(minute_df['timestamp'], min_lowerband, color='black', linestyle='-')
         
         # 绘制MA120
-        ma120 = talib.SMA(higher_df['close'], timeperiod=120)
+        ma120 = talib.EMA(higher_df['close'], timeperiod=120)
         self.ax1.plot(higher_df['timestamp'], ma120, label='MA120', color='purple')
         
-        min_ma120 = talib.SMA(minute_df['close'], timeperiod=120)
+        # 绘制小级别MA120
+        min_ma120 = talib.EMA(minute_df['close'], timeperiod=5)
         self.ax1.plot(minute_df['timestamp'], min_ma120, color='yellow')
         
         # 绘制当前窗口内的买卖信号
@@ -390,8 +391,11 @@ class BacktestEnv:
         top3_volume = Strategy.calculate_topn_volume_averages(higher_strategy_df_120)
         ema5_top1_volume = top3_volume[0]
         ema5s = talib.EMA(higher_strategy_df['close'], timeperiod=5)
+        min_ema5s = talib.EMA(min_strategy_df['close'], timeperiod=3)
         last_ema5 = ema5s.iloc[-1]
         pre_ema5 = ema5s.iloc[-2]
+        last_min_ema5 = min_ema5s.iloc[-1]
+        pre_min_ema5 = min_ema5s.iloc[-2]
         ema120s = talib.EMA(higher_strategy_df['close'], timeperiod=120)
         min_ema120s = talib.EMA(min_strategy_df['close'], timeperiod=120)
         last_ema120 = ema120s.iloc[-1]
@@ -407,9 +411,9 @@ class BacktestEnv:
         pre_ma120 = ma120s.iloc[-2]
         
         min_macd, min_signal, min_his = talib.MACD(min_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
-        min_last_signal = min_signal.iloc[-1]
-        min_pre_signal = min_signal.iloc[-2]
-        min_pre_pre_signal = min_signal.iloc[-3]
+        min_last_signal = min_his.iloc[-1]
+        min_pre_signal = min_his.iloc[-2]
+        min_pre_pre_signal = min_his.iloc[-3]
         
         higher_macd, higher_signal, higher_his = talib.MACD(higher_strategy_df['close'], fastperiod=12, slowperiod=26, signalperiod=9)
         higher_last_signal = higher_his.iloc[-1]
@@ -421,6 +425,12 @@ class BacktestEnv:
         last_upperband = upperband.iloc[-1]
         pre_middleband = middleband.iloc[-2]
         
+        min_upperband, min_middleband, min_lowerband = talib.BBANDS(min_strategy_df['close'], timeperiod=20)
+        last_min_middleband = min_middleband.iloc[-1]
+        last_min_lowerband = min_lowerband.iloc[-1]
+        last_min_upperband = min_upperband.iloc[-1]
+        pre_min_middleband = min_middleband.iloc[-2]
+        
         up_trend_ema120 = last_ema120 > pre_ema120
         down_trend_ema120 = last_ema120 < pre_ema120
         up_min_trend_ema120 = last_price > last_min_ema120
@@ -428,6 +438,9 @@ class BacktestEnv:
         
         up_trend_ema5 = last_ema5 >= pre_ema5
         down_trend_ema5 = last_ema5 <= pre_ema5
+        
+        up_min_trend_ema5 = last_min_ema5 >= pre_min_ema5
+        down_min_trend_ema5 = last_min_ema5 <= pre_min_ema5
         
         up_min_ema120 = last_min_ema120 > pre_min_ema120 or last_price >= last_min_ema120
         down_min_ema120 = last_min_ema120 < pre_min_ema120 or last_price <= last_min_ema120
@@ -467,54 +480,63 @@ class BacktestEnv:
             #             self.add_sell_signal(current_time, last_price)
             
             
-            long_macd_signal = (min_pre_signal > 0 and min_pre_pre_signal <= 0) or (higher_last_signal > 0 and higher_pre_signal <= 0)
+            long_macd_signal = (min_last_signal > 0 and min_pre_signal <= 0) or (higher_last_signal > 0 and higher_pre_signal <= 0)
             if long_macd_signal:
                 if last_higher_timestamp not in self.buy_records['higher_long']:
                     self.buy_records['higher_long'].append(last_higher_timestamp)
                 else:
                     long_macd_signal = False
             
-            short_macd_signal = (min_pre_signal < 0 and min_pre_pre_signal >= 0) or (higher_last_signal < 0 and higher_pre_signal >= 0)
+            short_macd_signal = (min_last_signal < 0 and min_pre_signal >= 0) or (higher_last_signal < 0 and higher_pre_signal >= 0)
             if short_macd_signal:
                 if last_higher_timestamp not in self.buy_records['higher_short']:
                     self.buy_records['higher_short'].append(last_higher_timestamp)
                 else:
                     short_macd_signal = False
             
-            long_min_ema120_signal = last_price > last_min_ema120 and pre_low <= pre_min_ema120
+            long_min_ema120_signal = False # last_price > last_min_ema120 and pre_low <= pre_min_ema120
             if long_min_ema120_signal:
                 if last_higher_timestamp not in self.buy_records['higher_long']:
                     self.buy_records['higher_long'].append(last_higher_timestamp)
                 else:
                     long_min_ema120_signal = False
             
-            short_min_ema120_signal = last_price < last_min_ema120 and pre_low >= pre_min_ema120
+            short_min_ema120_signal = False # last_price < last_min_ema120 and pre_low >= pre_min_ema120
             if short_min_ema120_signal:
                 if last_higher_timestamp not in self.buy_records['higher_short']:
                     self.buy_records['higher_short'].append(last_higher_timestamp)
                 else:
                     short_min_ema120_signal = False
+                    
+            
+            last_max_bb_m_ma120_price = max(last_price, last_min_ema120)
+            pre_max_bb_m_ma120_price = max(pre_price, pre_min_ema120)
+            long_bb_ma120_signal = pre_price < pre_max_bb_m_ma120_price and last_price >= last_max_bb_m_ma120_price
+            
+            last_min_bb_m_ma120_price = min(last_price, last_min_ema120)
+            pre_min_bb_m_ma120_price = min(pre_price, pre_min_ema120)
+            short_bb_ma120_signal = pre_price < pre_min_bb_m_ma120_price and last_price <= last_min_bb_m_ma120_price
             
             # 做多
             if (last_price > min_standard_price and up_min_ema120) or self.buy_long_flag:
                 # 开多
-                if higher_last_signal > 0 and (long_macd_signal or long_min_ema120_signal) and up_min_trend_ema120 and up_trend_ema5:
-                    self.add_long_signal(current_time, last_price)
+                if ((higher_last_signal > 0 and long_macd_signal and up_min_trend_ema5) or long_min_ema120_signal or long_bb_ma120_signal) and up_min_trend_ema120 and up_trend_ema5 and last_price < last_upperband:
+                    # self.add_long_signal(current_time, last_price)
                     self.buy_long_flag = True
                     
                 # 卖多
-                if (higher_last_signal < 0 and higher_pre_signal >= 0) or (min_pre_signal < 0 and min_pre_pre_signal >= 0):
-                    self.add_sell_signal(current_time, last_price)
+                if (higher_last_signal < 0 and higher_pre_signal >= 0) or (min_last_signal < 0 and min_pre_signal >= 0 and not up_min_trend_ema5):
+                    # self.add_sell_signal(current_time, last_price)
                     self.buy_long_flag = False
             
             # 做空
             if (last_price < max_standard_price and down_min_ema120) or self.buy_short_flag:
                 # 开空
-                if higher_last_signal < 0 and (short_macd_signal or short_min_ema120_signal) and down_min_trend_ema120 and down_trend_ema5:
-                    self.add_short_signal(current_time, last_price)
+                if ((higher_last_signal < 0 and short_macd_signal and down_min_trend_ema5)or short_min_ema120_signal or short_bb_ma120_signal) and down_min_trend_ema120 and down_trend_ema5 and last_price > last_lowerband:
+                    # self.add_short_signal(current_time, last_price)
                     self.buy_short_flag = True
                     
                 # 卖空
-                if (higher_last_signal > 0 and higher_pre_signal <= 0) or (min_pre_signal > 0 and min_pre_pre_signal <= 0):
-                    self.add_sell_signal(current_time, last_price)
+                if (higher_last_signal > 0 and higher_pre_signal <= 0) or (min_last_signal > 0 and min_pre_signal <= 0 and not down_min_trend_ema5):
+                    # self.add_sell_signal(current_time, last_price)
                     self.buy_short_flag = False
