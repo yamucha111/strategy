@@ -36,6 +36,8 @@ class BacktestEnv:
         self.origin_higher_df = None  # 记录上次处理的最后一个数据点的时间戳
         # self.position_manager = PositionManager(initial_balance, "BTC/USD", leverage, slippage, fee_rate)  # 初始化仓位管理器
         self.buy_records = {'higher_long': [], 'higher_short': [], 'min_long': [], 'min_short': []}
+        self.buy_long_flag = False
+        self.buy_short_flag = False
         self.init_legend()
         
     def get_interval_minutes(self, interval):
@@ -123,9 +125,18 @@ class BacktestEnv:
         self.ax1.plot(higher_df['timestamp'], middleband, label='Middle Band', color='black', linestyle='--')
         self.ax1.plot(higher_df['timestamp'], lowerband, label='Lower Band', color='blue', linestyle='--')
         
+        # 绘制布林带
+        min_upperband, min_middleband, min_lowerband = talib.BBANDS(minute_df['close'], timeperiod=20)
+        self.ax1.plot(minute_df['timestamp'], min_upperband, color='black', linestyle='-')
+        self.ax1.plot(minute_df['timestamp'], min_middleband, color='black', linestyle='-')
+        self.ax1.plot(minute_df['timestamp'], min_lowerband, color='black', linestyle='-')
+        
         # 绘制MA120
         ma120 = talib.SMA(higher_df['close'], timeperiod=120)
         self.ax1.plot(higher_df['timestamp'], ma120, label='MA120', color='purple')
+        
+        min_ma120 = talib.SMA(minute_df['close'], timeperiod=120)
+        self.ax1.plot(minute_df['timestamp'], min_ma120, color='yellow')
         
         # 绘制当前窗口内的买卖信号
         window_start_time = higher_df['timestamp'].min()
@@ -485,21 +496,25 @@ class BacktestEnv:
                     short_min_ema120_signal = False
             
             # 做多
-            if last_price > min_standard_price and up_min_ema120:
+            if (last_price > min_standard_price and up_min_ema120) or self.buy_long_flag:
                 # 开多
                 if higher_last_signal > 0 and (long_macd_signal or long_min_ema120_signal) and up_min_trend_ema120 and up_trend_ema5:
                     self.add_long_signal(current_time, last_price)
-                
+                    self.buy_long_flag = True
+                    
                 # 卖多
                 if (higher_last_signal < 0 and higher_pre_signal >= 0) or (min_pre_signal < 0 and min_pre_pre_signal >= 0):
                     self.add_sell_signal(current_time, last_price)
+                    self.buy_long_flag = False
             
             # 做空
-            if last_price < max_standard_price and down_min_ema120:
+            if (last_price < max_standard_price and down_min_ema120) or self.buy_short_flag:
                 # 开空
                 if higher_last_signal < 0 and (short_macd_signal or short_min_ema120_signal) and down_min_trend_ema120 and down_trend_ema5:
                     self.add_short_signal(current_time, last_price)
-                
+                    self.buy_short_flag = True
+                    
                 # 卖空
                 if (higher_last_signal > 0 and higher_pre_signal <= 0) or (min_pre_signal > 0 and min_pre_pre_signal <= 0):
                     self.add_sell_signal(current_time, last_price)
+                    self.buy_short_flag = False
