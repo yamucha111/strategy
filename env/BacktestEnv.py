@@ -453,7 +453,7 @@ class BacktestEnv:
             long_macd_signal = (min_pre_signal > 0 and min_pre_pre_signal <= 0) or (higher_last_signal > 0 and higher_pre_signal <= 0)
             short_macd_signal = (min_pre_signal < 0 and min_pre_pre_signal >= 0) or (higher_last_signal < 0 and higher_pre_signal >= 0)
             
-            long_min_ema120_signal = last_price > last_min_ema120 and last_high <= pre_min_ema120
+            long_min_ema120_signal = last_price > last_min_ema120 and last_low <= pre_min_ema120
             short_min_ema120_signal = last_price < last_min_ema120 and last_high >= pre_min_ema120
             
             # 做多
