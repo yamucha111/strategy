@@ -5,6 +5,7 @@ import numpy as np
 import matplotlib.dates as mdates
 from datetime import datetime, timedelta
 from core.strategy import Strategy
+from account.PositionManager import PositionManager
 import talib
 pd.set_option('mode.chained_assignment', None)
 
@@ -33,6 +34,8 @@ class BacktestEnv:
         self.volume_breakout_points = {'up': [], 'down': []}  # 记录交易量突破点
         self.last_volume_timestamp = None  # 记录上次处理的最后一个数据点的时间戳
         self.origin_higher_df = None  # 记录上次处理的最后一个数据点的时间戳
+        # self.position_manager = PositionManager(initial_balance, "BTC/USD", leverage, slippage, fee_rate)  # 初始化仓位管理器
+        self.buy_records = {'higher_long': [], 'higher_short': [], 'min_long': [], 'min_short': []}
         self.init_legend()
         
     def get_interval_minutes(self, interval):
@@ -357,6 +360,8 @@ class BacktestEnv:
         lows = prices["low"]
         closes = prices['close']
         
+        last_higher_timestamp = higher_strategy_df['timestamp'].iloc[-1]
+        
         last_price = closes.iloc[-1]
         pre_price = closes.iloc[-2]
         pre_pre_price = closes.iloc[-3]
@@ -450,11 +455,34 @@ class BacktestEnv:
             #         if last_price > last_middleband and down_trend_ema5 and down_min_trend_ema120 and down_bb_ma120:
             #             self.add_sell_signal(current_time, last_price)
             
-            long_macd_signal = (min_pre_signal > 0 and min_pre_pre_signal <= 0) or (higher_last_signal > 0 and higher_pre_signal <= 0)
-            short_macd_signal = (min_pre_signal < 0 and min_pre_pre_signal >= 0) or (higher_last_signal < 0 and higher_pre_signal >= 0)
             
-            long_min_ema120_signal = last_price > last_min_ema120 and last_low <= pre_min_ema120
-            short_min_ema120_signal = last_price < last_min_ema120 and last_high >= pre_min_ema120
+            long_macd_signal = (min_pre_signal > 0 and min_pre_pre_signal <= 0) or (higher_last_signal > 0 and higher_pre_signal <= 0)
+            if long_macd_signal:
+                if last_higher_timestamp not in self.buy_records['higher_long']:
+                    self.buy_records['higher_long'].append(last_higher_timestamp)
+                else:
+                    long_macd_signal = False
+            
+            short_macd_signal = (min_pre_signal < 0 and min_pre_pre_signal >= 0) or (higher_last_signal < 0 and higher_pre_signal >= 0)
+            if short_macd_signal:
+                if last_higher_timestamp not in self.buy_records['higher_short']:
+                    self.buy_records['higher_short'].append(last_higher_timestamp)
+                else:
+                    short_macd_signal = False
+            
+            long_min_ema120_signal = last_price > last_min_ema120 and pre_low <= pre_min_ema120
+            if long_min_ema120_signal:
+                if last_higher_timestamp not in self.buy_records['higher_long']:
+                    self.buy_records['higher_long'].append(last_higher_timestamp)
+                else:
+                    long_min_ema120_signal = False
+            
+            short_min_ema120_signal = last_price < last_min_ema120 and pre_low >= pre_min_ema120
+            if short_min_ema120_signal:
+                if last_higher_timestamp not in self.buy_records['higher_short']:
+                    self.buy_records['higher_short'].append(last_higher_timestamp)
+                else:
+                    short_min_ema120_signal = False
             
             # 做多
             if last_price > min_standard_price and up_min_ema120:
