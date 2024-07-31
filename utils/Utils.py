@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import pandas as pd
+import numpy as np
 import random
 
 class Utils:
@@ -77,3 +78,32 @@ class Utils:
         combined_df['close'] = pd.to_numeric(combined_df['close'], errors='coerce')
         combined_df['volume'] = pd.to_numeric(combined_df['volume'], errors='coerce')
         return combined_df
+    
+    @staticmethod
+    def calculate_percentile(df):
+        """
+        计算给定指标的当前值在历史上的百分位数，并绘制其历史分布图。
+        
+        参数:
+        df (DataFrame): 包含时间序列数据的DataFrame。
+        column_name (str): 指标的列名。
+        title (str): 图表的标题。
+        
+        返回:
+        percentile (float): 当前指标值的历史百分位数。
+        """
+        # 计算标准化指标
+        df['Normalized'] = (df - df.mean()) / df.std()
+
+        # 当前指标值
+        current_value = df['Normalized'].iloc[-1]
+
+        # 历史分布分析
+        historical_values = df['Normalized'].iloc[:-1]
+
+        # 计算当前指标在历史上的百分位数
+        percentile = np.searchsorted(np.sort(historical_values), current_value) / len(historical_values) * 100
+
+        # print(f"当前{column_name}的历史百分位数：{percentile:.2f} / 100")
+
+        return percentile
