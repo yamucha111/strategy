@@ -45,6 +45,7 @@ class BacktestEnv:
         
         self.last_max_price = None
         self.last_min_price = None
+        self.yes_records = {}
         self.init_legend()
         
     def get_interval_minutes(self, interval):
@@ -120,7 +121,7 @@ class BacktestEnv:
 
         # 调用set_signals方法来设置信号
         higher_strategy_df.iloc[-1] = higher_df.iloc[-1]
-        self.set_signals(current_time, minute_df, min_strategy_df, higher_strategy_df)
+        self.set_signals(current_time, minute_df, higher_df, min_strategy_df, higher_strategy_df)
         
         self.ax1.clear()
         self.ax2.clear()
@@ -397,14 +398,20 @@ class BacktestEnv:
         self.sell_signals.append({'timestamp': timestamp, 'price': price})
         self.sell_signals = self.sell_signals[-self.window:]
 
-    def set_signals(self, current_time, prices, min_strategy_df, higher_strategy_df):        
-        highs = prices["high"]
-        lows = prices["low"]
-        closes = prices['close']
+    def set_signals(self, current_time, minute_df, higher_df, min_strategy_df, higher_strategy_df):        
+        highs = higher_df["high"]
+        lows = higher_df["low"]
+        closes = higher_df['close']
+        
+        min_highs = minute_df["high"]
+        min_lows = minute_df["low"]
+        min_closes = minute_df['close']
         
         last_higher_timestamp = higher_strategy_df['timestamp'].iloc[-1]
+        pre_higher_timestamp = higher_strategy_df['timestamp'].iloc[-2]
         
         last_price = closes.iloc[-1]
+        min_last_price = min_closes.iloc[-1]
         if self.last_max_price is None:
             self.last_max_price = last_price
             
@@ -419,6 +426,9 @@ class BacktestEnv:
         pre_price = closes.iloc[-2]
         pre_pre_price = closes.iloc[-3]
         
+        min_pre_price = min_closes.iloc[-2]
+        min_pre_pre_price = min_closes.iloc[-3]
+        
         last_high = highs.iloc[-1]
         pre_high = highs.iloc[-2]
         pre_pre_high = highs.iloc[-3]
@@ -426,6 +436,14 @@ class BacktestEnv:
         last_low = lows.iloc[-1]
         pre_low = lows.iloc[-2]
         pre_pre_low = lows.iloc[-3]
+        
+        min_last_high = min_highs.iloc[-1]
+        min_pre_high = min_highs.iloc[-2]
+        min_pre_pre_high = min_highs.iloc[-3]
+        
+        min_last_low = min_lows.iloc[-1]
+        min_pre_low = min_lows.iloc[-2]
+        min_pre_pre_low = min_lows.iloc[-3]
         
         """使用当前最新的时间和价格来设置买入和卖出信号"""
         higher_strategy_df_120 = higher_strategy_df.iloc[-120:]
@@ -442,8 +460,6 @@ class BacktestEnv:
         last_ema120 = ema120s.iloc[-1]
         pre_ema120 = ema120s.iloc[-2]
         last_min_ema120 = min_ema120s.iloc[-1]
-        pre_min_ema120 = min_ema120s.iloc[-2]
-        pre_pre_min_ema120 = min_ema120s.iloc[-3]
         
         last_ema140 = talib.EMA(higher_strategy_df['close'], timeperiod=140).iloc[-1]
         last_ema160 = talib.EMA(higher_strategy_df['close'], timeperiod=160).iloc[-1]
@@ -475,7 +491,6 @@ class BacktestEnv:
         last_min_middleband = min_middleband.iloc[-1]
         last_min_lowerband = min_lowerband.iloc[-1]
         last_min_upperband = min_upperband.iloc[-1]
-        pre_min_middleband = min_middleband.iloc[-2]
         
         atrs = talib.ATR(min_strategy_df['high'], min_strategy_df['low'], min_strategy_df['close'], timeperiod=14)
         
@@ -493,14 +508,24 @@ class BacktestEnv:
         up_min_trend_ema5 = last_min_ema5 >= pre_min_ema5
         down_min_trend_ema5 = last_min_ema5 <= pre_min_ema5
         
-        up_min_ema120 = last_min_ema120 > pre_min_ema120 or last_price >= last_min_ema120
-        down_min_ema120 = last_min_ema120 < pre_min_ema120 or last_price <= last_min_ema120
-        
+
         if last_price > last_upperband:
             self.local_maxima.append({'timestamp': current_time, 'price': higher_strategy_df['high'].iloc[-1]})
             
         if last_price < last_lowerband:
             self.local_minima.append({'timestamp': current_time, 'price': higher_strategy_df['high'].iloc[-1]})
+            
+        self.yes_records[last_higher_timestamp] = {"pre_min_middleband": last_min_middleband}
+        self.yes_records[last_higher_timestamp]["pre_min_ema120"] = last_min_ema120
+        
+        if pre_higher_timestamp not in self.yes_records:
+            return
+        
+        pre_min_middleband = self.yes_records[pre_higher_timestamp]["pre_min_middleband"]
+        pre_min_ema120 = self.yes_records[pre_higher_timestamp]["pre_min_ema120"]
+        
+        up_min_ema120 = last_min_ema120 > pre_min_ema120 or last_price >= last_min_ema120
+        down_min_ema120 = last_min_ema120 < pre_min_ema120 or last_price <= last_min_ema120
             
         if not np.isnan([last_ema120, last_ema140, last_ema160, last_ma120]).any():
             max_standard_price = max(last_ema120, last_ema140, last_ema160, last_ma120)
