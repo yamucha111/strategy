@@ -581,8 +581,8 @@ class BacktestEnv:
             sell_short_macd_signal = higher_last_signal > 0 and higher_pre_signal <= 0
             sell_short_min_macd_signal = min_last_signal > 0 and min_pre_signal <= 0
             
-            buy_short_min_ema5_bb_m_singal = sell_long_min_ema5_bb_m_singal = pre_min_ema5 > pre_min_middleband and last_min_ema5 <= last_min_middleband
-            buy_long_min_ema5_bb_m_singal = sell_short_min_ema5_bb_m_singal = pre_min_ema5 < pre_min_middleband and last_min_ema5 >= last_min_middleband
+            buy_short_min_ema5_bb_m_singal = pre_min_ema5 > pre_min_bb_m_ma120_price and last_min_ema5 <= last_min_bb_m_ma120_price
+            buy_long_min_ema5_bb_m_singal = pre_min_ema5 < pre_max_bb_m_ma120_price and last_min_ema5 >= last_max_bb_m_ma120_price
             
             up_bb_m = last_middleband > pre_middleband
             down_bb_m = last_middleband < pre_middleband
@@ -619,6 +619,7 @@ class BacktestEnv:
                             buy_singal = True
                     
                     if buy_singal:
+                        print('bb_m_sl:', bb_m_sl, '-->', 'ema120_sl:', ema120_sl)
                         self.buy_records['higher_long'].append(last_higher_timestamp)
                         self.add_long_signal(current_time, last_price)
                         
@@ -653,5 +654,6 @@ class BacktestEnv:
                             sell_singal = True
                     
                     if sell_singal:
+                        print('bb_m_sl:', bb_m_sl, '-->', 'ema120_sl:', ema120_sl)
                         self.buy_records['higher_short'].append(last_higher_timestamp)
                         self.add_short_signal(current_time, last_price)
